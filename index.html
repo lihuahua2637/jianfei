@@ -1750,7 +1750,8 @@ const defaultData = {
   weights: [],
   meals: [],
   exercises: [],
-  water: {} // { '2024-01-01': 2000 }
+  water: {}, // { '2024-01-01': 2000 }
+  lastModified: ''
 };
 
 let appData = loadData();
@@ -1769,6 +1770,7 @@ function loadData() {
 
 function saveData(autoSync = true) {
   try {
+    appData.lastModified = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
     showSaveIndicator();
     if (autoSync) tryAutoSync();
@@ -2975,6 +2977,57 @@ async function downloadFromGithub() {
   }
 }
 
+// 启动时自动同步：打开页面自动比对云端和本地，取最新的
+async function autoSyncOnStart() {
+  if (!syncConfig.githubToken || !syncConfig.githubGistId) return;
+  try {
+    const res = await fetch(GITHUB_API + '/gists/' + syncConfig.githubGistId, {
+      method: 'GET',
+      headers: {
+        'Authorization': 'token ' + syncConfig.githubToken,
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    });
+    if (!res.ok) return;
+    const gist = await res.json();
+    const file = gist.files && gist.files[GIST_FILENAME];
+    if (!file) return;
+    const cloudData = JSON.parse(file.content);
+
+    // 本地是空数据（新设备），直接拉取云端
+    const localEmpty = !appData.weights.length && !appData.meals.length && !appData.exercises.length && Object.keys(appData.water).length === 0;
+    if (localEmpty) {
+      appData = { ...defaultData, ...cloudData, profile: { ...defaultData.profile, ...cloudData.profile }, goals: { ...defaultData.goals, ...cloudData.goals } };
+      saveData(false);
+      renderAll();
+      syncConfig.githubLastSync = new Date().toLocaleString('zh-CN');
+      saveSyncConfig();
+      updateSyncStatus();
+      showToast('已从云端同步数据');
+      return;
+    }
+
+    // 比较时间戳，取更新的一方
+    const localTime = appData.lastModified ? new Date(appData.lastModified).getTime() : 0;
+    const cloudTime = cloudData.lastModified ? new Date(cloudData.lastModified).getTime() : 0;
+
+    if (cloudTime > localTime) {
+      appData = { ...defaultData, ...cloudData, profile: { ...defaultData.profile, ...cloudData.profile }, goals: { ...defaultData.goals, ...cloudData.goals } };
+      saveData(false);
+      renderAll();
+      syncConfig.githubLastSync = new Date().toLocaleString('zh-CN');
+      saveSyncConfig();
+      updateSyncStatus();
+      showToast('已从云端同步最新数据');
+    } else if (localTime > cloudTime) {
+      await uploadToGithub();
+    }
+  } catch (e) {
+    console.error('启动自动同步失败', e);
+    // 静默失败，不影响本地使用
+  }
+}
+
 function toggleGithubAutoSync() {
   syncConfig.githubAutoSync = document.getElementById('githubAutoSync').checked;
   saveSyncConfig();
@@ -3163,6 +3216,9 @@ function init() {
       closeSidebar();
     }
   });
+
+  // 启动时自动云同步（打开页面自动拉取最新数据）
+  autoSyncOnStart();
 }
 
 // 页面加载完成后初始化
