@@ -202,6 +202,12 @@ body {
   color: var(--text-primary);
 }
 
+.topbar-greeting {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
 .topbar-date {
   font-size: 13px;
   color: var(--text-secondary);
@@ -1262,6 +1268,7 @@ body {
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
         <div class="topbar-title" id="pageTitle">数据总览</div>
+        <div class="topbar-greeting" id="greeting"></div>
         <div class="topbar-date" id="currentDate"></div>
       </div>
       <div class="topbar-right">
@@ -3182,6 +3189,13 @@ function init() {
   const now = new Date();
   const dateStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日 ' + ['周日','周一','周二','周三','周四','周五','周六'][now.getDay()];
   document.getElementById('currentDate').textContent = dateStr;
+
+  // 设置问候语（根据时间）
+  const hour = now.getHours();
+  let greeting = '晚上好';
+  if (hour >= 5 && hour < 12) greeting = '早上好';
+  else if (hour >= 12 && hour < 18) greeting = '下午好';
+  document.getElementById('greeting').textContent = greeting + '，今天也要加油哦！';
 
   // 路由初始化
   const hashRoute = location.hash.replace('#', '');
