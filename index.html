@@ -1204,7 +1204,7 @@ body {
         </svg>
       </div>
       <div>
-        <div class="logo-text">轻体工作台</div>
+        <div class="logo-text" id="appTitle">轻体工作台</div>
         <div class="logo-sub">Fitness Dashboard</div>
       </div>
     </div>
@@ -3138,6 +3138,10 @@ function saveProfile() {
     height: height !== null ? height : appData.profile.height
   };
   saveData();
+  // 更新左上角标题
+  const titleEl = document.getElementById('appTitle');
+  if (name) titleEl.textContent = name + '的工作台';
+  else titleEl.textContent = '轻体工作台';
   renderGoalsPage();
   renderStatsPage();
   showToast('个人资料已保存');
@@ -3196,6 +3200,12 @@ function init() {
   if (hour >= 5 && hour < 12) greeting = '早上好';
   else if (hour >= 12 && hour < 18) greeting = '下午好';
   document.getElementById('greeting').textContent = greeting + '，今天也要加油哦！';
+
+  // 设置左上角标题（有昵称显示昵称，否则显示默认名）
+  const titleEl = document.getElementById('appTitle');
+  if (appData.profile && appData.profile.name) {
+    titleEl.textContent = appData.profile.name + '的工作台';
+  }
 
   // 路由初始化
   const hashRoute = location.hash.replace('#', '');
