@@ -1379,7 +1379,7 @@ body {
             <div class="card mb-20">
               <div class="card-header">
                 <div class="card-title">今日饮食</div>
-                <span class="tag tag-accent" id="todayMealCalories">0 千卡</span>
+                <span class="tag tag-accent" id="todayMealCalories">0 卡</span>
               </div>
               <div id="mealSections"></div>
             </div>
@@ -1409,11 +1409,25 @@ body {
                 </select>
               </div>
               <div class="form-group">
+                <label class="form-label">拍照识别食物</label>
+                <input type="file" id="mealPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleMealPhoto(event)">
+                <button type="button" class="btn btn-secondary" style="width:100%;" onclick="document.getElementById('mealPhotoInput').click()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  拍照 / 选图识别热量
+                </button>
+                <div id="mealPhotoPreview" style="display:none;margin-top:10px;">
+                  <img id="mealPhotoImg" style="max-width:100%;border-radius:8px;margin-bottom:8px;">
+                  <div id="mealPhotoStatus" style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">识别中...</div>
+                  <div id="mealDishResults" style="display:flex;flex-direction:column;gap:6px;"></div>
+                </div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-top:6px;line-height:1.5;">需先在「数据统计」底部配置百度 AI 识别密钥（免费）</div>
+              </div>
+              <div class="form-group">
                 <label class="form-label">食物名称</label>
                 <input type="text" class="form-input" id="mealName" placeholder="例如：鸡胸肉沙拉">
               </div>
               <div class="form-group">
-                <label class="form-label">热量 (千卡)</label>
+                <label class="form-label">热量 (卡)</label>
                 <input type="number" class="form-input" id="mealCalories" placeholder="请输入热量">
               </div>
               <button class="btn btn-primary" style="width:100%;" onclick="addMeal()">
@@ -1469,7 +1483,7 @@ body {
                 </div>
               </div>
               <div class="form-group">
-                <label class="form-label">消耗热量 (千卡) <span style="font-weight:400;color:#94A3B8;font-size:12px;">自动计算，可手动调整</span></label>
+                <label class="form-label">消耗热量 (卡) <span style="font-weight:400;color:#94A3B8;font-size:12px;">自动计算，可手动调整</span></label>
                 <input type="number" class="form-input" id="exerciseCalories" placeholder="输入时长/距离后自动计算">
               </div>
               <button class="btn btn-primary" style="width:100%;" onclick="addExercise()">
@@ -1648,6 +1662,33 @@ body {
               <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;">
                 令牌仅存在你当前浏览器的本地存储中，不会上传到任何第三方服务器。上次 GitHub 同步：<span id="githubLastSync">从未</span>
               </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+          <div class="card-header">
+            <div class="card-title">百度 AI 食物识别 <span class="tag tag-primary" style="font-size:10px;">拍照识热量</span></div>
+          </div>
+          <div class="card-body">
+            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6;">
+              配置后可在「饮食记录」页面拍照识别食物名称和热量。百度智能云提供免费额度（每天约 500 次），密钥仅存在本地浏览器。
+              <a href="https://console.bce.baidu.com/ai/#/ai/imagerecognition/overview/index" target="_blank" style="color:var(--primary);">点此开通菜品识别并获取密钥</a>（创建应用后拿到 API Key 和 Secret Key）。
+            </p>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">API Key</label>
+                <input type="text" class="form-input" id="baiduApiKey" placeholder="百度智能云 API Key">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Secret Key</label>
+                <input type="password" class="form-input" id="baiduSecretKey" placeholder="百度智能云 Secret Key">
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+              <button class="btn btn-primary" onclick="saveBaiduConfig()">保存配置</button>
+              <button class="btn btn-secondary" onclick="testBaiduConfig()">测试识别</button>
+              <span id="baiduConfigStatus" style="font-size:12px;color:var(--text-secondary);"></span>
             </div>
           </div>
         </div>
@@ -1934,8 +1975,8 @@ function renderDashboard() {
 
   const stats = [
     { label: '当前体重', value: currentWeight || '--', unit: 'kg', icon: 'weight', color: chartColors.primary, bg: '#D1FAE5', change: getWeightChange() },
-    { label: '今日摄入', value: todayCalories, unit: '千卡', icon: 'meal', color: chartColors.accent, bg: '#FEF3C7', change: { text: appData.meals.filter(m => m.date === today).length + ' 条记录', type: 'neutral' } },
-    { label: '今日消耗', value: todayExercise.calories, unit: '千卡', icon: 'exercise', color: chartColors.info, bg: '#DBEAFE', change: { text: todayExercise.duration + ' 分钟', type: 'neutral' } },
+    { label: '今日摄入', value: todayCalories, unit: '卡', icon: 'meal', color: chartColors.accent, bg: '#FEF3C7', change: { text: appData.meals.filter(m => m.date === today).length + ' 条记录', type: 'neutral' } },
+    { label: '今日消耗', value: todayExercise.calories, unit: '卡', icon: 'exercise', color: chartColors.info, bg: '#DBEAFE', change: { text: todayExercise.duration + ' 分钟', type: 'neutral' } },
     { label: '今日饮水', value: todayWater, unit: 'ml', icon: 'water', color: '#0EA5E9', bg: '#E0F2FE', change: { text: '目标 ' + appData.goals.waterTarget + 'ml', type: todayWater >= appData.goals.waterTarget ? 'down' : 'up' } },
     { label: '距目标体重', value: currentWeight ? Math.max(0, (currentWeight - targetWeight)).toFixed(1) : '--', unit: 'kg', icon: 'target', color: chartColors.purple, bg: '#EDE9FE', change: { text: '目标 ' + targetWeight + 'kg', type: 'neutral' } }
   ];
@@ -1976,7 +2017,7 @@ function renderDashboard() {
     <div class="goal-progress">
       <div class="goal-progress-header">
         <span class="goal-progress-label">运动消耗</span>
-        <span class="goal-progress-value">${todayExercise.calories} 千卡 / ${todayExercise.duration} 分钟</span>
+        <span class="goal-progress-value">${todayExercise.calories} 卡 / ${todayExercise.duration} 分钟</span>
       </div>
       <div class="goal-progress-bar">
         <div class="goal-progress-fill" style="width:${Math.min(100, (todayExercise.calories / 500) * 100)}%;background:${chartColors.info};"></div>
@@ -2180,10 +2221,16 @@ function renderMealsPage() {
   const weekDays = getLastNDays(7);
   const weekAvg = Math.round(weekDays.reduce((sum, d) => sum + getDayCalories(d), 0) / 7);
 
+  // 重置拍照识别区域
+  const preview = document.getElementById('mealPhotoPreview');
+  if (preview) preview.style.display = 'none';
+  const resultsEl = document.getElementById('mealDishResults');
+  if (resultsEl) resultsEl.innerHTML = '';
+
   const stats = [
-    { label: '今日摄入', value: todayCalories, unit: '千卡', color: chartColors.accent, bg: '#FEF3C7' },
-    { label: '本周总摄入', value: weekDays.reduce((s, d) => s + getDayCalories(d), 0), unit: '千卡', color: chartColors.primary, bg: '#D1FAE5' },
-    { label: '本周日均', value: weekAvg, unit: '千卡', color: chartColors.info, bg: '#DBEAFE' },
+    { label: '今日摄入', value: todayCalories, unit: '卡', color: chartColors.accent, bg: '#FEF3C7' },
+    { label: '本周总摄入', value: weekDays.reduce((s, d) => s + getDayCalories(d), 0), unit: '卡', color: chartColors.primary, bg: '#D1FAE5' },
+    { label: '本周日均', value: weekAvg, unit: '卡', color: chartColors.info, bg: '#DBEAFE' },
     { label: '今日记录', value: appData.meals.filter(m => m.date === today).length, unit: '条', color: chartColors.purple, bg: '#EDE9FE' }
   ];
 
@@ -2194,7 +2241,7 @@ function renderMealsPage() {
     </div>
   `).join('');
 
-  document.getElementById('todayMealCalories').textContent = todayCalories + ' 千卡';
+  document.getElementById('todayMealCalories').textContent = todayCalories + ' 卡';
   document.getElementById('mealDate').value = today;
   renderMealSections();
   renderMealList();
@@ -2217,7 +2264,7 @@ function renderMealSections() {
             <span style="width:8px;height:8px;border-radius:50%;background:${colors[type]};display:inline-block;"></span>
             ${type}
           </div>
-          <div class="meal-section-calories">${cal} 千卡</div>
+          <div class="meal-section-calories">${cal} 卡</div>
         </div>
         ${items.length === 0 ? '<div style="font-size:12px;color:#94A3B8;padding:8px 0;">暂无记录</div>' : items.map(m => `
           <div class="record-item" style="padding:10px 0;border-bottom:1px solid #F1F5F9;">
@@ -2230,7 +2277,7 @@ function renderMealSections() {
               </div>
             </div>
             <div class="record-actions">
-              <div class="record-value" style="font-size:14px;">${m.calories}<span class="unit"> 千卡</span></div>
+              <div class="record-value" style="font-size:14px;">${m.calories}<span class="unit"> 卡</span></div>
               <button class="delete-btn" onclick="deleteMeal('${m.id}')">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
               </button>
@@ -2264,7 +2311,7 @@ function renderMealList() {
         </div>
       </div>
       <div class="record-actions">
-        <div class="record-value">${m.calories}<span class="unit"> 千卡</span></div>
+        <div class="record-value">${m.calories}<span class="unit"> 卡</span></div>
         <button class="delete-btn" onclick="deleteMeal('${m.id}')">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
         </button>
@@ -2310,9 +2357,9 @@ function renderExercisePage() {
   const weekCount = appData.exercises.filter(e => weekDays.includes(e.date)).length;
 
   const stats = [
-    { label: '今日消耗', value: todayEx.calories, unit: '千卡', color: chartColors.info, bg: '#DBEAFE' },
+    { label: '今日消耗', value: todayEx.calories, unit: '卡', color: chartColors.info, bg: '#DBEAFE' },
     { label: '今日时长', value: todayEx.duration, unit: '分钟', color: chartColors.primary, bg: '#D1FAE5' },
-    { label: '本周消耗', value: weekCalories, unit: '千卡', color: chartColors.accent, bg: '#FEF3C7' },
+    { label: '本周消耗', value: weekCalories, unit: '卡', color: chartColors.accent, bg: '#FEF3C7' },
     { label: '本周运动', value: weekCount, unit: '次 / ' + weekDuration + '分钟', color: chartColors.purple, bg: '#EDE9FE' }
   ];
 
@@ -2335,15 +2382,15 @@ function renderExerciseChart() {
 
   initChart('exerciseChart', {
     tooltip: { trigger: 'axis' },
-    legend: { data: ['消耗(千卡)', '时长(分钟)'], top: 0, textStyle: { color: '#64748B', fontSize: 12 } },
+    legend: { data: ['消耗(卡)', '时长(分钟)'], top: 0, textStyle: { color: '#64748B', fontSize: 12 } },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
     xAxis: { type: 'category', data: weekDays.map(d => getDayName(d)), axisLine: { lineStyle: { color: '#E2E8F0' } }, axisLabel: { color: '#94A3B8', fontSize: 11 } },
     yAxis: [
-      { type: 'value', name: '千卡', axisLine: { show: false }, axisTick: { show: false }, splitLine: { lineStyle: { color: '#F1F5F9' } }, axisLabel: { color: '#94A3B8', fontSize: 11 }, nameTextStyle: { color: '#94A3B8', fontSize: 11 } },
+      { type: 'value', name: '卡', axisLine: { show: false }, axisTick: { show: false }, splitLine: { lineStyle: { color: '#F1F5F9' } }, axisLabel: { color: '#94A3B8', fontSize: 11 }, nameTextStyle: { color: '#94A3B8', fontSize: 11 } },
       { type: 'value', name: '分钟', axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false }, axisLabel: { color: '#94A3B8', fontSize: 11 }, nameTextStyle: { color: '#94A3B8', fontSize: 11 } }
     ],
     series: [
-      { name: '消耗(千卡)', type: 'bar', data: calories, barWidth: '40%', itemStyle: { color: chartColors.info, borderRadius: [4, 4, 0, 0] } },
+      { name: '消耗(卡)', type: 'bar', data: calories, barWidth: '40%', itemStyle: { color: chartColors.info, borderRadius: [4, 4, 0, 0] } },
       { name: '时长(分钟)', type: 'line', yAxisIndex: 1, data: duration, smooth: true, symbol: 'circle', symbolSize: 8, lineStyle: { color: chartColors.accent, width: 2.5 }, itemStyle: { color: chartColors.accent } }
     ]
   });
@@ -2376,7 +2423,7 @@ function renderExerciseList() {
         </div>
       </div>
       <div class="record-actions">
-        <div class="record-value">${e.calories}<span class="unit"> 千卡</span></div>
+        <div class="record-value">${e.calories}<span class="unit"> 卡</span></div>
         <button class="delete-btn" onclick="deleteExercise('${e.id}')">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
         </button>
@@ -2385,7 +2432,7 @@ function renderExerciseList() {
   `).join('');
 }
 
-// 运动热量计算参数：perKm = 每公斤体重每公里消耗(千卡)，perMin = 每公斤体重每分钟消耗(千卡)
+// 运动热量计算参数：perKm = 每公斤体重每公里消耗(卡)，perMin = 每公斤体重每分钟消耗(卡)
 const EXERCISE_CALORIE_PARAMS = {
   '跑步':     { perKm: 1.036, perMin: 0.140 },
   '游泳':     { perKm: 3.200, perMin: 0.120 },
@@ -2582,6 +2629,9 @@ function renderStatsPage() {
   document.getElementById('githubToken').value = syncConfig.githubToken || '';
   document.getElementById('githubGistId').value = syncConfig.githubGistId || '';
   document.getElementById('githubAutoSync').checked = syncConfig.githubAutoSync || false;
+  // 填充百度 AI 配置表单
+  document.getElementById('baiduApiKey').value = syncConfig.baiduApiKey || '';
+  document.getElementById('baiduSecretKey').value = syncConfig.baiduSecretKey || '';
   updateSyncStatus();
 }
 
@@ -2698,7 +2748,7 @@ function renderStatsSummary() {
       </div>
       <div style="padding:16px;background:#F8FAFC;border-radius:10px;">
         <div style="font-size:12px;color:#64748B;margin-bottom:6px;">运动总消耗</div>
-        <div style="font-size:24px;font-weight:700;color:#0EA5E9;">${totalExerciseCal}<span style="font-size:13px;font-weight:400;color:#64748B;"> 千卡</span></div>
+        <div style="font-size:24px;font-weight:700;color:#0EA5E9;">${totalExerciseCal}<span style="font-size:13px;font-weight:400;color:#64748B;"> 卡</span></div>
       </div>
     </div>
     <div style="margin-top:16px;padding:16px;background:linear-gradient(135deg,#F0FDF4,#ECFEFF);border-radius:10px;display:flex;align-items:center;justify-content:space-between;">
@@ -2764,7 +2814,7 @@ function clearAllData() {
 
 // ===== 数据同步 =====
 const SYNC_CONFIG_KEY = 'fitness_sync_config';
-let syncConfig = { githubToken: '', githubGistId: '', githubAutoSync: false, githubLastSync: '' };
+let syncConfig = { githubToken: '', githubGistId: '', githubAutoSync: false, githubLastSync: '', baiduApiKey: '', baiduSecretKey: '', baiduToken: '', baiduTokenExpire: 0 };
 
 function loadSyncConfig() {
   try {
@@ -3040,6 +3090,140 @@ function toggleGithubAutoSync() {
   saveSyncConfig();
   updateSyncStatus();
   showToast(syncConfig.githubAutoSync ? 'GitHub 自动同步已开启' : 'GitHub 自动同步已关闭');
+}
+
+// ===== 百度 AI 食物识别 =====
+function saveBaiduConfig() {
+  syncConfig.baiduApiKey = document.getElementById('baiduApiKey').value.trim();
+  syncConfig.baiduSecretKey = document.getElementById('baiduSecretKey').value.trim();
+  syncConfig.baiduToken = '';
+  syncConfig.baiduTokenExpire = 0;
+  saveSyncConfig();
+  const statusEl = document.getElementById('baiduConfigStatus');
+  if (statusEl) statusEl.textContent = '已保存';
+  showToast('百度 AI 配置已保存');
+}
+
+async function getBaiduAccessToken() {
+  if (!syncConfig.baiduApiKey || !syncConfig.baiduSecretKey) {
+    throw new Error('请先在数据统计页面配置百度 AI 密钥');
+  }
+  // token 有效期内直接复用（百度 token 有效期 30 天，提前 1 小时刷新）
+  if (syncConfig.baiduToken && syncConfig.baiduTokenExpire > Date.now() + 3600000) {
+    return syncConfig.baiduToken;
+  }
+  const res = await fetch('https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=' + encodeURIComponent(syncConfig.baiduApiKey) + '&client_secret=' + encodeURIComponent(syncConfig.baiduSecretKey));
+  if (!res.ok) throw new Error('获取百度 Token 失败 HTTP ' + res.status);
+  const data = await res.json();
+  if (!data.access_token) throw new Error(data.error_description || '获取百度 Token 失败');
+  syncConfig.baiduToken = data.access_token;
+  syncConfig.baiduTokenExpire = Date.now() + (data.expires_in || 2592000) * 1000;
+  saveSyncConfig();
+  return data.access_token;
+}
+
+async function testBaiduConfig() {
+  const statusEl = document.getElementById('baiduConfigStatus');
+  try {
+    if (statusEl) statusEl.textContent = '测试中...';
+    await getBaiduAccessToken();
+    if (statusEl) statusEl.textContent = '✓ 配置有效';
+    showToast('百度 AI 配置测试成功');
+  } catch (e) {
+    if (statusEl) statusEl.textContent = '✗ ' + e.message;
+    showToast('测试失败：' + e.message);
+  }
+}
+
+function handleMealPhoto(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const preview = document.getElementById('mealPhotoPreview');
+  const img = document.getElementById('mealPhotoImg');
+  const statusEl = document.getElementById('mealPhotoStatus');
+  const resultsEl = document.getElementById('mealDishResults');
+
+  // 显示预览
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    img.src = e.target.result;
+    preview.style.display = 'block';
+    statusEl.textContent = '识别中，请稍候...';
+    resultsEl.innerHTML = '';
+    // 压缩图片并识别
+    compressImage(e.target.result, 800, 0.8).then(compressed => {
+      recognizeDish(compressed);
+    }).catch(err => {
+      statusEl.textContent = '图片处理失败：' + err.message;
+    });
+  };
+  reader.readAsDataURL(file);
+  // 允许重复选择同一文件
+  event.target.value = '';
+}
+
+function compressImage(dataUrl, maxWidth, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if (w > maxWidth) { h = h * maxWidth / w; w = maxWidth; }
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+async function recognizeDish(imageDataUrl) {
+  const statusEl = document.getElementById('mealPhotoStatus');
+  const resultsEl = document.getElementById('mealDishResults');
+  try {
+    const token = await getBaiduAccessToken();
+    // 去掉 base64 前缀
+    const base64 = imageDataUrl.split(',')[1];
+    const formData = new URLSearchParams();
+    formData.append('image', base64);
+    formData.append('top_num', '5');
+    const res = await fetch('https://aip.baidubce.com/rest/2.0/image-classify/v2/dish?access_token=' + token, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString()
+    });
+    if (!res.ok) throw new Error('识别失败 HTTP ' + res.status);
+    const data = await res.json();
+    if (data.error_code) throw new Error(data.error_msg || '识别失败');
+    if (!data.result || data.result.length === 0) {
+      statusEl.textContent = '未识别到菜品，请手动输入';
+      return;
+    }
+    statusEl.textContent = '识别到 ' + data.result.length + ' 种可能，点击选择：';
+    resultsEl.innerHTML = '';
+    data.result.forEach((dish, i) => {
+      const calorie = dish.calorie ? Math.round(parseFloat(dish.calorie)) : 0;
+      const prob = (parseFloat(dish.probability) * 100).toFixed(0);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-secondary';
+      btn.style.cssText = 'width:100%;justify-content:space-between;text-align:left;font-size:13px;';
+      btn.innerHTML = '<span>' + dish.name + '</span><span style="color:var(--text-secondary);font-size:12px;">' + calorie + ' 卡 · ' + prob + '%</span>';
+      btn.onclick = function() { selectDish(dish.name, calorie); };
+      resultsEl.appendChild(btn);
+    });
+  } catch (e) {
+    console.error('菜品识别失败', e);
+    statusEl.textContent = '识别失败：' + e.message + '（可手动输入）';
+  }
+}
+
+function selectDish(name, calorie) {
+  document.getElementById('mealName').value = name;
+  document.getElementById('mealCalories').value = calorie;
+  showToast('已选择：' + name + '（' + calorie + ' 卡），可手动调整后添加');
 }
 
 // ===== 目标设置页 =====
