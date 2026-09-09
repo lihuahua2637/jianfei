@@ -1409,18 +1409,21 @@ body {
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label">拍照识别食物</label>
+                <label class="form-label">拍照记录食物</label>
                 <input type="file" id="mealPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleMealPhoto(event)">
                 <button type="button" class="btn btn-secondary" style="width:100%;" onclick="document.getElementById('mealPhotoInput').click()">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                  拍照 / 选图识别热量
+                  拍照 / 选图（可选）
                 </button>
                 <div id="mealPhotoPreview" style="display:none;margin-top:10px;">
                   <img id="mealPhotoImg" style="max-width:100%;border-radius:8px;margin-bottom:8px;">
-                  <div id="mealPhotoStatus" style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">识别中...</div>
-                  <div id="mealDishResults" style="display:flex;flex-direction:column;gap:6px;"></div>
+                  <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 10px;" onclick="removeMealPhoto()">移除照片</button>
                 </div>
-                <div style="font-size:12px;color:var(--text-secondary);margin-top:6px;line-height:1.5;">需先在「数据统计」底部配置百度 AI 识别密钥（免费）</div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">快速选择食物（点击自动填入热量）</label>
+                <input type="text" class="form-input" id="foodSearch" placeholder="搜索食物，如：米饭、鸡胸肉、苹果..." oninput="filterFoodList()" style="margin-bottom:8px;">
+                <div id="foodList" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px;"></div>
               </div>
               <div class="form-group">
                 <label class="form-label">食物名称</label>
@@ -1662,33 +1665,6 @@ body {
               <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;">
                 令牌仅存在你当前浏览器的本地存储中，不会上传到任何第三方服务器。上次 GitHub 同步：<span id="githubLastSync">从未</span>
               </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top:20px;">
-          <div class="card-header">
-            <div class="card-title">百度 AI 食物识别 <span class="tag tag-primary" style="font-size:10px;">拍照识热量</span></div>
-          </div>
-          <div class="card-body">
-            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6;">
-              配置后可在「饮食记录」页面拍照识别食物名称和热量。百度智能云提供免费额度（每天约 500 次），密钥仅存在本地浏览器。
-              <a href="https://console.bce.baidu.com/ai/#/ai/imagerecognition/overview/index" target="_blank" style="color:var(--primary);">点此开通菜品识别并获取密钥</a>（创建应用后拿到 API Key 和 Secret Key）。
-            </p>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">API Key</label>
-                <input type="text" class="form-input" id="baiduApiKey" placeholder="百度智能云 API Key">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Secret Key</label>
-                <input type="password" class="form-input" id="baiduSecretKey" placeholder="百度智能云 Secret Key">
-              </div>
-            </div>
-            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
-              <button class="btn btn-primary" onclick="saveBaiduConfig()">保存配置</button>
-              <button class="btn btn-secondary" onclick="testBaiduConfig()">测试识别</button>
-              <span id="baiduConfigStatus" style="font-size:12px;color:var(--text-secondary);"></span>
             </div>
           </div>
         </div>
@@ -2221,11 +2197,11 @@ function renderMealsPage() {
   const weekDays = getLastNDays(7);
   const weekAvg = Math.round(weekDays.reduce((sum, d) => sum + getDayCalories(d), 0) / 7);
 
-  // 重置拍照识别区域
+  // 重置拍照和食物选择区域
+  currentMealPhoto = '';
   const preview = document.getElementById('mealPhotoPreview');
   if (preview) preview.style.display = 'none';
-  const resultsEl = document.getElementById('mealDishResults');
-  if (resultsEl) resultsEl.innerHTML = '';
+  renderFoodList();
 
   const stats = [
     { label: '今日摄入', value: todayCalories, unit: '卡', color: chartColors.accent, bg: '#FEF3C7' },
@@ -2306,7 +2282,10 @@ function renderMealList() {
           <span style="font-size:11px;font-weight:600;color:${typeTextColors[m.type]};">${m.type}</span>
         </div>
         <div class="record-details">
-          <div class="record-name">${m.name}</div>
+          <div class="record-name" style="display:flex;align-items:center;gap:8px;">
+            ${m.photo ? '<img src="' + m.photo + '" style="width:36px;height:36px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="showMealPhoto(\'' + m.id + '\')">' : ''}
+            <span>${m.name}</span>
+          </div>
           <div class="record-meta">${m.date} ${getDayName(m.date)}</div>
         </div>
       </div>
@@ -2320,6 +2299,19 @@ function renderMealList() {
   `).join('');
 }
 
+function showMealPhoto(id) {
+  const meal = appData.meals.find(m => m.id === id);
+  if (!meal || !meal.photo) return;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+  overlay.onclick = () => overlay.remove();
+  const img = document.createElement('img');
+  img.src = meal.photo;
+  img.style.cssText = 'max-width:90%;max-height:90%;border-radius:8px;';
+  overlay.appendChild(img);
+  document.body.appendChild(overlay);
+}
+
 function addMeal() {
   const date = document.getElementById('mealDate').value;
   const type = document.getElementById('mealType').value;
@@ -2330,10 +2322,13 @@ function addMeal() {
   if (!calories || calories <= 0) { showToast('请输入有效的热量'); return; }
   if (calories > 5000) { showToast('热量数值异常，请检查'); return; }
 
-  appData.meals.push({ id: generateId(), date, type, name, calories });
+  appData.meals.push({ id: generateId(), date, type, name, calories, photo: currentMealPhoto || '' });
   saveData();
   document.getElementById('mealName').value = '';
   document.getElementById('mealCalories').value = '';
+  document.getElementById('foodSearch').value = '';
+  removeMealPhoto();
+  renderFoodList();
   renderMealsPage();
   renderDashboard();
   showToast('饮食记录已添加');
@@ -2441,6 +2436,112 @@ const EXERCISE_CALORIE_PARAMS = {
   '篮球':     { perKm: 0,     perMin: 0.095 },
   '其他':     { perKm: 0,     perMin: 0.060 }
 };
+
+// 常见食物热量数据库（参考值，单位：卡/份，可手动调整）
+const FOOD_DATABASE = [
+  // 主食
+  { name: '米饭（一碗）', calories: 230, category: '主食' },
+  { name: '白粥（一碗）', calories: 70, category: '主食' },
+  { name: '馒头（一个）', calories: 220, category: '主食' },
+  { name: '花卷（一个）', calories: 210, category: '主食' },
+  { name: '包子（一个）', calories: 200, category: '主食' },
+  { name: '饺子（10个）', calories: 250, category: '主食' },
+  { name: '面条（一碗）', calories: 280, category: '主食' },
+  { name: '拉面（一碗）', calories: 450, category: '主食' },
+  { name: '炒面（一份）', calories: 550, category: '主食' },
+  { name: '面包（一片）', calories: 70, category: '主食' },
+  { name: '全麦面包（一片）', calories: 80, category: '主食' },
+  { name: '燕麦片（40g）', calories: 150, category: '主食' },
+  { name: '红薯（一个）', calories: 130, category: '主食' },
+  { name: '玉米（一根）', calories: 110, category: '主食' },
+  { name: '紫薯（一个）', calories: 120, category: '主食' },
+  { name: '三明治（一个）', calories: 350, category: '主食' },
+  { name: '汉堡（一个）', calories: 500, category: '主食' },
+  { name: '披萨（一块）', calories: 280, category: '主食' },
+  { name: '寿司（一份）', calories: 350, category: '主食' },
+  { name: '炒饭（一份）', calories: 600, category: '主食' },
+  { name: '盖浇饭（一份）', calories: 650, category: '主食' },
+  // 肉蛋奶
+  { name: '鸡胸肉（100g）', calories: 130, category: '肉蛋奶' },
+  { name: '鸡腿（一个）', calories: 180, category: '肉蛋奶' },
+  { name: '鸡翅（3个）', calories: 200, category: '肉蛋奶' },
+  { name: '炸鸡（一块）', calories: 280, category: '肉蛋奶' },
+  { name: '猪肉（100g）', calories: 395, category: '肉蛋奶' },
+  { name: '红烧肉（一份）', calories: 450, category: '肉蛋奶' },
+  { name: '牛肉（100g）', calories: 250, category: '肉蛋奶' },
+  { name: '牛排（一份）', calories: 400, category: '肉蛋奶' },
+  { name: '羊肉（100g）', calories: 290, category: '肉蛋奶' },
+  { name: '鱼（100g）', calories: 120, category: '肉蛋奶' },
+  { name: '三文鱼（100g）', calories: 200, category: '肉蛋奶' },
+  { name: '虾（100g）', calories: 90, category: '肉蛋奶' },
+  { name: '鸡蛋（一个）', calories: 70, category: '肉蛋奶' },
+  { name: '煎蛋（一个）', calories: 90, category: '肉蛋奶' },
+  { name: '茶叶蛋（一个）', calories: 75, category: '肉蛋奶' },
+  { name: '牛奶（一杯250ml）', calories: 130, category: '肉蛋奶' },
+  { name: '脱脂牛奶（一杯）', calories: 90, category: '肉蛋奶' },
+  { name: '酸奶（一杯）', calories: 100, category: '肉蛋奶' },
+  { name: '无糖酸奶（一杯）', calories: 60, category: '肉蛋奶' },
+  // 蔬菜
+  { name: '西兰花（一份）', calories: 50, category: '蔬菜' },
+  { name: '菠菜（一份）', calories: 30, category: '蔬菜' },
+  { name: '白菜（一份）', calories: 25, category: '蔬菜' },
+  { name: '黄瓜（一根）', calories: 15, category: '蔬菜' },
+  { name: '番茄（一个）', calories: 20, category: '蔬菜' },
+  { name: '茄子（一份）', calories: 30, category: '蔬菜' },
+  { name: '土豆（一个）', calories: 80, category: '蔬菜' },
+  { name: '胡萝卜（一根）', calories: 40, category: '蔬菜' },
+  { name: '生菜（一份）', calories: 15, category: '蔬菜' },
+  { name: '凉拌黄瓜（一份）', calories: 50, category: '蔬菜' },
+  { name: '番茄炒蛋（一份）', calories: 200, category: '蔬菜' },
+  { name: '炒青菜（一份）', calories: 80, category: '蔬菜' },
+  { name: '地三鲜（一份）', calories: 250, category: '蔬菜' },
+  // 水果
+  { name: '苹果（一个）', calories: 90, category: '水果' },
+  { name: '香蕉（一根）', calories: 90, category: '水果' },
+  { name: '橙子（一个）', calories: 70, category: '水果' },
+  { name: '橘子（一个）', calories: 50, category: '水果' },
+  { name: '西瓜（一块）', calories: 50, category: '水果' },
+  { name: '葡萄（一串）', calories: 100, category: '水果' },
+  { name: '草莓（10颗）', calories: 40, category: '水果' },
+  { name: '蓝莓（一盒）', calories: 80, category: '水果' },
+  { name: '猕猴桃（一个）', calories: 60, category: '水果' },
+  { name: '芒果（一个）', calories: 130, category: '水果' },
+  { name: '梨（一个）', calories: 100, category: '水果' },
+  { name: '桃子（一个）', calories: 70, category: '水果' },
+  { name: '火龙果（一个）', calories: 120, category: '水果' },
+  { name: '牛油果（半个）', calories: 160, category: '水果' },
+  // 零食饮料
+  { name: '奶茶（一杯）', calories: 350, category: '零食饮料' },
+  { name: '无糖奶茶（一杯）', calories: 150, category: '零食饮料' },
+  { name: '可乐（一罐）', calories: 140, category: '零食饮料' },
+  { name: '零度可乐（一罐）', calories: 0, category: '零食饮料' },
+  { name: '雪碧（一罐）', calories: 140, category: '零食饮料' },
+  { name: '果汁（一杯）', calories: 120, category: '零食饮料' },
+  { name: '咖啡（一杯）', calories: 5, category: '零食饮料' },
+  { name: '拿铁（一杯）', calories: 190, category: '零食饮料' },
+  { name: '美式咖啡（一杯）', calories: 10, category: '零食饮料' },
+  { name: '薯片（一包）', calories: 540, category: '零食饮料' },
+  { name: '巧克力（一块）', calories: 250, category: '零食饮料' },
+  { name: '饼干（3片）', calories: 150, category: '零食饮料' },
+  { name: '蛋糕（一块）', calories: 350, category: '零食饮料' },
+  { name: '冰淇淋（一个）', calories: 200, category: '零食饮料' },
+  { name: '棒棒糖（一个）', calories: 50, category: '零食饮料' },
+  { name: '坚果（一小把）', calories: 180, category: '零食饮料' },
+  { name: '辣条（一包）', calories: 300, category: '零食饮料' },
+  { name: '泡面（一桶）', calories: 450, category: '零食饮料' },
+  // 快餐小吃
+  { name: '薯条（中份）', calories: 340, category: '快餐小吃' },
+  { name: '炸鸡桶（一块）', calories: 320, category: '快餐小吃' },
+  { name: '鸡米花（一份）', calories: 380, category: '快餐小吃' },
+  { name: '烤肠（一根）', calories: 200, category: '快餐小吃' },
+  { name: '煎饼果子（一个）', calories: 400, category: '快餐小吃' },
+  { name: '手抓饼（一个）', calories: 380, category: '快餐小吃' },
+  { name: '肉夹馍（一个）', calories: 350, category: '快餐小吃' },
+  { name: '凉皮（一份）', calories: 280, category: '快餐小吃' },
+  { name: '烤冷面（一份）', calories: 350, category: '快餐小吃' },
+  { name: '臭豆腐（一份）', calories: 250, category: '快餐小吃' },
+  { name: '关东煮（一串）', calories: 80, category: '快餐小吃' }
+];
 
 function getBodyWeight() {
   const w = getCurrentWeight();
@@ -2629,9 +2730,6 @@ function renderStatsPage() {
   document.getElementById('githubToken').value = syncConfig.githubToken || '';
   document.getElementById('githubGistId').value = syncConfig.githubGistId || '';
   document.getElementById('githubAutoSync').checked = syncConfig.githubAutoSync || false;
-  // 填充百度 AI 配置表单
-  document.getElementById('baiduApiKey').value = syncConfig.baiduApiKey || '';
-  document.getElementById('baiduSecretKey').value = syncConfig.baiduSecretKey || '';
   updateSyncStatus();
 }
 
@@ -2814,7 +2912,7 @@ function clearAllData() {
 
 // ===== 数据同步 =====
 const SYNC_CONFIG_KEY = 'fitness_sync_config';
-let syncConfig = { githubToken: '', githubGistId: '', githubAutoSync: false, githubLastSync: '', baiduApiKey: '', baiduSecretKey: '', baiduToken: '', baiduTokenExpire: 0 };
+let syncConfig = { githubToken: '', githubGistId: '', githubAutoSync: false, githubLastSync: '' };
 
 function loadSyncConfig() {
   try {
@@ -3092,75 +3190,61 @@ function toggleGithubAutoSync() {
   showToast(syncConfig.githubAutoSync ? 'GitHub 自动同步已开启' : 'GitHub 自动同步已关闭');
 }
 
-// ===== 百度 AI 食物识别 =====
-function saveBaiduConfig() {
-  syncConfig.baiduApiKey = document.getElementById('baiduApiKey').value.trim();
-  syncConfig.baiduSecretKey = document.getElementById('baiduSecretKey').value.trim();
-  syncConfig.baiduToken = '';
-  syncConfig.baiduTokenExpire = 0;
-  saveSyncConfig();
-  const statusEl = document.getElementById('baiduConfigStatus');
-  if (statusEl) statusEl.textContent = '已保存';
-  showToast('百度 AI 配置已保存');
-}
-
-async function getBaiduAccessToken() {
-  if (!syncConfig.baiduApiKey || !syncConfig.baiduSecretKey) {
-    throw new Error('请先在数据统计页面配置百度 AI 密钥');
-  }
-  // token 有效期内直接复用（百度 token 有效期 30 天，提前 1 小时刷新）
-  if (syncConfig.baiduToken && syncConfig.baiduTokenExpire > Date.now() + 3600000) {
-    return syncConfig.baiduToken;
-  }
-  const tokenUrl = 'https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=' + encodeURIComponent(syncConfig.baiduApiKey) + '&client_secret=' + encodeURIComponent(syncConfig.baiduSecretKey);
-  const res = await fetch('https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(tokenUrl));
-  if (!res.ok) throw new Error('获取百度 Token 失败 HTTP ' + res.status);
-  const data = await res.json();
-  if (!data.access_token) throw new Error(data.error_description || '获取百度 Token 失败');
-  syncConfig.baiduToken = data.access_token;
-  syncConfig.baiduTokenExpire = Date.now() + (data.expires_in || 2592000) * 1000;
-  saveSyncConfig();
-  return data.access_token;
-}
-
-async function testBaiduConfig() {
-  const statusEl = document.getElementById('baiduConfigStatus');
-  try {
-    if (statusEl) statusEl.textContent = '测试中...';
-    await getBaiduAccessToken();
-    if (statusEl) statusEl.textContent = '✓ 配置有效';
-    showToast('百度 AI 配置测试成功');
-  } catch (e) {
-    if (statusEl) statusEl.textContent = '✗ ' + e.message;
-    showToast('测试失败：' + e.message);
-  }
-}
+let currentMealPhoto = '';
 
 function handleMealPhoto(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
   const preview = document.getElementById('mealPhotoPreview');
   const img = document.getElementById('mealPhotoImg');
-  const statusEl = document.getElementById('mealPhotoStatus');
-  const resultsEl = document.getElementById('mealDishResults');
-
-  // 显示预览
   const reader = new FileReader();
   reader.onload = function(e) {
-    img.src = e.target.result;
-    preview.style.display = 'block';
-    statusEl.textContent = '识别中，请稍候...';
-    resultsEl.innerHTML = '';
-    // 压缩图片并识别
-    compressImage(e.target.result, 800, 0.8).then(compressed => {
-      recognizeDish(compressed);
-    }).catch(err => {
-      statusEl.textContent = '图片处理失败：' + err.message;
+    // 压缩图片
+    compressImage(e.target.result, 600, 0.7).then(compressed => {
+      currentMealPhoto = compressed;
+      img.src = compressed;
+      preview.style.display = 'block';
     });
   };
   reader.readAsDataURL(file);
-  // 允许重复选择同一文件
   event.target.value = '';
+}
+
+function removeMealPhoto() {
+  currentMealPhoto = '';
+  document.getElementById('mealPhotoPreview').style.display = 'none';
+  document.getElementById('mealPhotoImg').src = '';
+}
+
+function renderFoodList() {
+  const listEl = document.getElementById('foodList');
+  if (!listEl) return;
+  const keyword = (document.getElementById('foodSearch')?.value || '').trim().toLowerCase();
+  const filtered = keyword
+    ? FOOD_DATABASE.filter(f => f.name.toLowerCase().includes(keyword) || f.category.includes(keyword))
+    : FOOD_DATABASE;
+  if (filtered.length === 0) {
+    listEl.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text-secondary);font-size:13px;">未找到匹配食物，可手动输入名称和热量</div>';
+    return;
+  }
+  listEl.innerHTML = filtered.map(f =>
+    '<div class="food-item" data-name="' + f.name + '" data-cal="' + f.calories + '" style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px;" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'transparent\'">' +
+      '<span>' + f.name + '</span>' +
+      '<span style="color:var(--text-secondary);font-size:12px;">' + f.calories + ' 卡</span>' +
+    '</div>'
+  ).join('');
+  // 绑定点击事件
+  listEl.querySelectorAll('.food-item').forEach(item => {
+    item.addEventListener('click', function() {
+      document.getElementById('mealName').value = this.dataset.name;
+      document.getElementById('mealCalories').value = this.dataset.cal;
+      showToast('已选择：' + this.dataset.name + '（' + this.dataset.cal + ' 卡），可手动调整');
+    });
+  });
+}
+
+function filterFoodList() {
+  renderFoodList();
 }
 
 function compressImage(dataUrl, maxWidth, quality) {
@@ -3178,54 +3262,6 @@ function compressImage(dataUrl, maxWidth, quality) {
     img.onerror = reject;
     img.src = dataUrl;
   });
-}
-
-async function recognizeDish(imageDataUrl) {
-  const statusEl = document.getElementById('mealPhotoStatus');
-  const resultsEl = document.getElementById('mealDishResults');
-  try {
-    const token = await getBaiduAccessToken();
-    // 去掉 base64 前缀
-    const base64 = imageDataUrl.split(',')[1];
-    const formData = new URLSearchParams();
-    formData.append('image', base64);
-    formData.append('top_num', '5');
-    const dishUrl = 'https://aip.baidubce.com/rest/2.0/image-classify/v2/dish?access_token=' + token;
-    const res = await fetch('https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(dishUrl), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formData.toString()
-    });
-    if (!res.ok) throw new Error('识别失败 HTTP ' + res.status);
-    const data = await res.json();
-    if (data.error_code) throw new Error(data.error_msg || '识别失败');
-    if (!data.result || data.result.length === 0) {
-      statusEl.textContent = '未识别到菜品，请手动输入';
-      return;
-    }
-    statusEl.textContent = '识别到 ' + data.result.length + ' 种可能，点击选择：';
-    resultsEl.innerHTML = '';
-    data.result.forEach((dish, i) => {
-      const calorie = dish.calorie ? Math.round(parseFloat(dish.calorie)) : 0;
-      const prob = (parseFloat(dish.probability) * 100).toFixed(0);
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'btn btn-secondary';
-      btn.style.cssText = 'width:100%;justify-content:space-between;text-align:left;font-size:13px;';
-      btn.innerHTML = '<span>' + dish.name + '</span><span style="color:var(--text-secondary);font-size:12px;">' + calorie + ' 卡 · ' + prob + '%</span>';
-      btn.onclick = function() { selectDish(dish.name, calorie); };
-      resultsEl.appendChild(btn);
-    });
-  } catch (e) {
-    console.error('菜品识别失败', e);
-    statusEl.textContent = '识别失败：' + e.message + '（可手动输入）';
-  }
-}
-
-function selectDish(name, calorie) {
-  document.getElementById('mealName').value = name;
-  document.getElementById('mealCalories').value = calorie;
-  showToast('已选择：' + name + '（' + calorie + ' 卡），可手动调整后添加');
 }
 
 // ===== 目标设置页 =====
