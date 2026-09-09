@@ -1662,6 +1662,12 @@ body {
                   保存后自动上传
                 </label>
               </div>
+              <div style="margin-bottom:12px;">
+                <button class="btn btn-secondary" style="font-size:12px;padding:6px 12px;" onclick="generateConfigLink()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  生成手机配置链接（发到手机点开自动填好）
+                </button>
+              </div>
               <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;">
                 令牌仅存在你当前浏览器的本地存储中，不会上传到任何第三方服务器。上次 GitHub 同步：<span id="githubLastSync">从未</span>
               </p>
@@ -3025,6 +3031,52 @@ function saveGithubConfig() {
   showToast('GitHub 配置已保存');
 }
 
+// 生成手机配置链接：把配置编码到 URL hash 里，发到手机点开自动填入
+function generateConfigLink() {
+  const token = document.getElementById('githubToken').value.trim();
+  const gistId = document.getElementById('githubGistId').value.trim();
+  const autoSync = document.getElementById('githubAutoSync').checked;
+  if (!token) { showToast('请先填写并保存 GitHub 配置'); return; }
+  const config = { t: token, g: gistId, a: autoSync ? 1 : 0 };
+  const encoded = btoa(encodeURIComponent(JSON.stringify(config)));
+  const link = location.origin + location.pathname + '#config=' + encoded;
+  navigator.clipboard.writeText(link).then(() => {
+    showToast('配置链接已复制，发到手机微信/短信，点开即自动配置');
+  }).catch(() => {
+    // 剪贴板不可用时，弹出输入框让用户手动复制
+    prompt('复制下面的链接，发到手机打开：', link);
+  });
+}
+
+// 从 URL hash 导入配置（手机端一键配置）
+function importConfigFromUrl() {
+  const hash = location.hash;
+  const match = hash.match(/#config=([^&]+)/);
+  if (!match) return;
+  try {
+    const decoded = JSON.parse(decodeURIComponent(atob(match[1])));
+    if (decoded.t) {
+      syncConfig.githubToken = decoded.t;
+      syncConfig.githubGistId = decoded.g || '';
+      syncConfig.githubAutoSync = decoded.a === 1;
+      saveSyncConfig();
+      // 填入表单
+      const tokenEl = document.getElementById('githubToken');
+      const gistEl = document.getElementById('githubGistId');
+      const autoEl = document.getElementById('githubAutoSync');
+      if (tokenEl) tokenEl.value = decoded.t;
+      if (gistEl) gistEl.value = decoded.g || '';
+      if (autoEl) autoEl.checked = decoded.a === 1;
+      updateSyncStatus();
+      showToast('云同步配置已自动导入');
+    }
+  } catch (e) {
+    console.error('配置链接解析失败', e);
+  }
+  // 清除 hash 里的配置，避免 Token 一直留在地址栏
+  history.replaceState(null, '', location.pathname + location.search);
+}
+
 async function uploadToGithub() {
   if (!syncConfig.githubToken) {
     showToast('请先配置 GitHub 访问令牌');
@@ -3409,6 +3461,8 @@ function getIcon(type) {
 function init() {
   // 加载同步配置
   loadSyncConfig();
+  // 检查 URL 里是否有配置链接（手机端一键导入）
+  importConfigFromUrl();
   updateSyncStatus();
 
   // 设置日期显示
