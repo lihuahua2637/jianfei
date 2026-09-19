@@ -1766,6 +1766,7 @@ const defaultData = {
   meals: [],
   exercises: [],
   water: {}, // { '2024-01-01': 2000 }
+  waterLogs: [], // [{id, date, time, amount}]
   lastModified: ''
 };
 
@@ -2530,10 +2531,26 @@ function renderWaterList() {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg></div><div class="empty-text">还没有饮水记录</div></div>`;
     return;
   }
+  const logs = appData.waterLogs || [];
   el.innerHTML = days.map(d => {
     const amount = appData.water[d];
     const target = appData.goals.waterTarget;
     const 达标 = amount >= target;
+    const dayLogs = logs.filter(l => l.date === d).sort((a, b) => a.time.localeCompare(b.time));
+    let logsHtml = '';
+    if (dayLogs.length > 0) {
+      logsHtml = '<div style="margin-top:8px;padding-left:44px;display:flex;flex-direction:column;gap:4px;">' +
+        dayLogs.map(l =>
+          '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text-secondary);padding:4px 8px;background:var(--bg);border-radius:6px;">' +
+            '<span>' + l.time + '</span>' +
+            '<span style="display:flex;align-items:center;gap:8px;">' +
+              '<span>' + l.amount + ' ml</span>' +
+              '<button onclick="deleteWaterLog(\'' + l.id + '\')" style="background:none;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:0 4px;">×</button>' +
+            '</span>' +
+          '</div>'
+        ).join('') +
+      '</div>';
+    }
     return `
       <div class="record-item">
         <div class="record-info">
@@ -2541,7 +2558,7 @@ function renderWaterList() {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${达标 ? '#059669' : '#0284C7'}" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
           </div>
           <div class="record-details">
-            <div class="record-name">${d} ${getDayName(d)}</div>
+            <div class="record-name">${d} ${getDayName(d)} <span style="font-size:12px;color:var(--text-secondary);font-weight:normal;">（${dayLogs.length}次）</span></div>
             <div class="record-meta">目标 ${target}ml</div>
           </div>
         </div>
@@ -2550,6 +2567,7 @@ function renderWaterList() {
           <div class="record-value">${amount}<span class="unit"> ml</span></div>
         </div>
       </div>
+      ${logsHtml}
     `;
   }).join('');
 }
@@ -2557,10 +2575,29 @@ function renderWaterList() {
 function addWater(amount) {
   const today = todayStr();
   appData.water[today] = (appData.water[today] || 0) + amount;
+  // 记录每次明细
+  const now = new Date();
+  const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+  appData.waterLogs = appData.waterLogs || [];
+  appData.waterLogs.push({ id: generateId(), date: today, time: timeStr, amount: amount });
   saveData();
   renderWaterPage();
   renderDashboard();
   showToast(`已记录 ${amount}ml 饮水`);
+}
+
+function deleteWaterLog(id) {
+  const log = appData.waterLogs.find(l => l.id === id);
+  if (!log) return;
+  if (!confirm('确定删除这条饮水记录（' + log.amount + 'ml）吗？')) return;
+  // 从每日总量里减去
+  appData.water[log.date] = Math.max(0, (appData.water[log.date] || 0) - log.amount);
+  // 从明细里删除
+  appData.waterLogs = appData.waterLogs.filter(l => l.id !== id);
+  saveData();
+  renderWaterPage();
+  renderDashboard();
+  showToast('已删除');
 }
 
 function addCustomWater() {
@@ -2575,6 +2612,7 @@ function resetTodayWater() {
   if (!confirm('确定重置今日饮水记录吗？')) return;
   const today = todayStr();
   appData.water[today] = 0;
+  appData.waterLogs = (appData.waterLogs || []).filter(l => l.date !== today);
   saveData();
   renderWaterPage();
   renderDashboard();
