@@ -1409,15 +1409,17 @@ body {
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label">拍照记录食物（可选）</label>
+                <label class="form-label">拍照识别食物</label>
                 <input type="file" id="mealPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleMealPhoto(event)">
                 <button type="button" class="btn btn-secondary" style="width:100%;" onclick="document.getElementById('mealPhotoInput').click()">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                  拍照 / 选图
+                  拍照 / 选图（自动识别热量）
                 </button>
                 <div id="mealPhotoPreview" style="display:none;margin-top:10px;">
                   <img id="mealPhotoImg" style="max-width:100%;border-radius:8px;margin-bottom:8px;">
-                  <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 10px;" onclick="removeMealPhoto()">移除照片</button>
+                  <div id="mealPhotoStatus" style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;"></div>
+                  <div id="mealDishResults"></div>
+                  <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 10px;margin-top:6px;" onclick="removeMealPhoto()">移除照片</button>
                 </div>
               </div>
               <div class="form-group">
@@ -1666,6 +1668,32 @@ body {
               <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;">
                 令牌仅存在你当前浏览器的本地存储中，不会上传到任何第三方服务器。上次 GitHub 同步：<span id="githubLastSync">从未</span>
               </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+          <div class="card-header">
+            <div class="card-title">AI 食物识别 <span class="tag tag-primary" style="font-size:10px;">拍照识热量</span></div>
+          </div>
+          <div class="card-body">
+            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6;">
+              配置后拍照自动识别食物名称和热量。百度智能云免费额度每天约 500 次。
+              <a href="https://console.bce.baidu.com/ai/#/ai/imagerecognition/overview/index" target="_blank" style="color:var(--primary);">点此获取 API Key 和 Secret Key</a>。
+            </p>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">API Key</label>
+                <input type="text" class="form-input" id="baiduApiKey" placeholder="百度 API Key">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Secret Key</label>
+                <input type="password" class="form-input" id="baiduSecretKey" placeholder="百度 Secret Key">
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+              <button class="btn btn-primary" onclick="saveBaiduConfig()">保存配置</button>
+              <span id="baiduConfigStatus" style="font-size:12px;color:var(--text-secondary);"></span>
             </div>
           </div>
         </div>
@@ -2622,6 +2650,11 @@ function renderStatsPage() {
   document.getElementById('githubToken').value = syncConfig.githubToken || '';
   document.getElementById('githubGistId').value = syncConfig.githubGistId || '';
   document.getElementById('githubAutoSync').checked = syncConfig.githubAutoSync || false;
+  // 填充百度 AI 配置
+  const baiduKeyEl = document.getElementById('baiduApiKey');
+  const baiduSecretEl = document.getElementById('baiduSecretKey');
+  if (baiduKeyEl) baiduKeyEl.value = syncConfig.baiduApiKey || '';
+  if (baiduSecretEl) baiduSecretEl.value = syncConfig.baiduSecretKey || '';
   updateSyncStatus();
 }
 
@@ -2804,7 +2837,7 @@ function clearAllData() {
 
 // ===== 数据同步 =====
 const SYNC_CONFIG_KEY = 'fitness_sync_config';
-let syncConfig = { githubToken: '', githubGistId: '', githubAutoSync: false, githubLastSync: '' };
+let syncConfig = { githubToken: '', githubGistId: '', githubAutoSync: false, githubLastSync: '', baiduApiKey: '', baiduSecretKey: '', baiduToken: '', baiduTokenExpire: 0 };
 
 function loadSyncConfig() {
   try {
@@ -3130,18 +3163,104 @@ function toggleGithubAutoSync() {
 
 let currentMealPhoto = '';
 
+// ===== 百度 AI 食物识别 =====
+function saveBaiduConfig() {
+  syncConfig.baiduApiKey = document.getElementById('baiduApiKey').value.trim();
+  syncConfig.baiduSecretKey = document.getElementById('baiduSecretKey').value.trim();
+  syncConfig.baiduToken = '';
+  syncConfig.baiduTokenExpire = 0;
+  saveSyncConfig();
+  const statusEl = document.getElementById('baiduConfigStatus');
+  if (statusEl) statusEl.textContent = '已保存';
+  showToast('AI 识别配置已保存');
+}
+
+async function getBaiduAccessToken() {
+  if (!syncConfig.baiduApiKey || !syncConfig.baiduSecretKey) {
+    throw new Error('请先在数据统计页面配置 AI 识别密钥');
+  }
+  if (syncConfig.baiduToken && syncConfig.baiduTokenExpire > Date.now() + 3600000) {
+    return syncConfig.baiduToken;
+  }
+  const tokenUrl = 'https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=' + encodeURIComponent(syncConfig.baiduApiKey) + '&client_secret=' + encodeURIComponent(syncConfig.baiduSecretKey);
+  const res = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(tokenUrl));
+  if (!res.ok) throw new Error('获取识别凭证失败 HTTP ' + res.status);
+  const data = await res.json();
+  if (!data.access_token) throw new Error(data.error_description || '获取识别凭证失败');
+  syncConfig.baiduToken = data.access_token;
+  syncConfig.baiduTokenExpire = Date.now() + (data.expires_in || 2592000) * 1000;
+  saveSyncConfig();
+  return data.access_token;
+}
+
+async function recognizeDish(imageDataUrl) {
+  const statusEl = document.getElementById('mealPhotoStatus');
+  const resultsEl = document.getElementById('mealDishResults');
+  try {
+    if (statusEl) statusEl.textContent = 'AI 识别中，请稍候...';
+    if (resultsEl) resultsEl.innerHTML = '';
+    const token = await getBaiduAccessToken();
+    const base64 = imageDataUrl.split(',')[1];
+    const formData = new URLSearchParams();
+    formData.append('image', base64);
+    formData.append('top_num', '5');
+    const dishUrl = 'https://aip.baidubce.com/rest/2.0/image-classify/v2/dish?access_token=' + token;
+    const res = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(dishUrl), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString()
+    });
+    if (!res.ok) throw new Error('识别失败 HTTP ' + res.status);
+    const data = await res.json();
+    if (data.error_code) throw new Error(data.error_msg || '识别失败');
+    if (!data.result || data.result.length === 0) {
+      if (statusEl) statusEl.textContent = '未识别到菜品，可手动输入';
+      return;
+    }
+    if (statusEl) statusEl.textContent = '识别到以下食物，点击选择：';
+    if (resultsEl) {
+      resultsEl.innerHTML = '';
+      data.result.forEach(dish => {
+        const calorie = dish.calorie ? Math.round(parseFloat(dish.calorie)) : 0;
+        const prob = (parseFloat(dish.probability) * 100).toFixed(0);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-secondary';
+        btn.style.cssText = 'width:100%;justify-content:space-between;text-align:left;font-size:13px;margin-bottom:6px;';
+        btn.innerHTML = '<span>' + dish.name + '</span><span style="color:var(--text-secondary);font-size:12px;">' + calorie + ' 卡 · ' + prob + '%</span>';
+        btn.onclick = function() { selectDish(dish.name, calorie); };
+        resultsEl.appendChild(btn);
+      });
+    }
+  } catch (e) {
+    console.error('菜品识别失败', e);
+    if (statusEl) statusEl.textContent = '识别失败：' + e.message + '（可手动输入）';
+  }
+}
+
+function selectDish(name, calorie) {
+  document.getElementById('mealName').value = name;
+  document.getElementById('mealCalories').value = calorie;
+  showToast('已选择：' + name + '（' + calorie + ' 卡），可手动调整');
+}
+
 function handleMealPhoto(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
   const preview = document.getElementById('mealPhotoPreview');
   const img = document.getElementById('mealPhotoImg');
+  const statusEl = document.getElementById('mealPhotoStatus');
+  const resultsEl = document.getElementById('mealDishResults');
   const reader = new FileReader();
   reader.onload = function(e) {
-    // 压缩图片
-    compressImage(e.target.result, 600, 0.7).then(compressed => {
+    compressImage(e.target.result, 800, 0.8).then(compressed => {
       currentMealPhoto = compressed;
       img.src = compressed;
       preview.style.display = 'block';
+      // 自动识别
+      if (statusEl) statusEl.textContent = '';
+      if (resultsEl) resultsEl.innerHTML = '';
+      recognizeDish(compressed);
     });
   };
   reader.readAsDataURL(file);
@@ -3152,6 +3271,10 @@ function removeMealPhoto() {
   currentMealPhoto = '';
   document.getElementById('mealPhotoPreview').style.display = 'none';
   document.getElementById('mealPhotoImg').src = '';
+  const statusEl = document.getElementById('mealPhotoStatus');
+  const resultsEl = document.getElementById('mealDishResults');
+  if (statusEl) statusEl.textContent = '';
+  if (resultsEl) resultsEl.innerHTML = '';
 }
 
 function compressImage(dataUrl, maxWidth, quality) {
