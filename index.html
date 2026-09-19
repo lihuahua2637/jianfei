@@ -2056,7 +2056,7 @@ function getWeightChange() {
 function getWeightGoalProgress() {
   const current = getCurrentWeight();
   if (!current) return 0;
-  const start = appData.weights.length > 0 ? [...appData.weights].sort((a, b) => a.date.localeCompare(b.date))[0].weight : current;
+  const start = appData.goals.startWeight || (appData.weights.length > 0 ? [...appData.weights].sort((a, b) => a.date.localeCompare(b.date))[0].weight : current);
   const target = appData.goals.targetWeight;
   if (start === target) return 100;
   const total = start - target;
@@ -3157,7 +3157,7 @@ function renderGoalsPage() {
 function renderGoalProgress() {
   const current = getCurrentWeight();
   const target = appData.goals.targetWeight;
-  const start = appData.weights.length > 0 ? [...appData.weights].sort((a, b) => a.date.localeCompare(b.date))[0].weight : current;
+  const start = appData.goals.startWeight || (appData.weights.length > 0 ? [...appData.weights].sort((a, b) => a.date.localeCompare(b.date))[0].weight : current);
   const progress = getWeightGoalProgress();
   const remaining = current ? Math.max(0, current - target).toFixed(1) : '--';
 
