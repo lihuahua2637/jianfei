@@ -1409,21 +1409,16 @@ body {
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label">拍照记录食物</label>
+                <label class="form-label">拍照记录食物（可选）</label>
                 <input type="file" id="mealPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleMealPhoto(event)">
                 <button type="button" class="btn btn-secondary" style="width:100%;" onclick="document.getElementById('mealPhotoInput').click()">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                  拍照 / 选图（可选）
+                  拍照 / 选图
                 </button>
                 <div id="mealPhotoPreview" style="display:none;margin-top:10px;">
                   <img id="mealPhotoImg" style="max-width:100%;border-radius:8px;margin-bottom:8px;">
                   <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 10px;" onclick="removeMealPhoto()">移除照片</button>
                 </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">快速选择食物（点击自动填入热量）</label>
-                <input type="text" class="form-input" id="foodSearch" placeholder="搜索食物，如：米饭、鸡胸肉、苹果..." oninput="filterFoodList()" style="margin-bottom:8px;">
-                <div id="foodList" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:6px;"></div>
               </div>
               <div class="form-group">
                 <label class="form-label">食物名称</label>
@@ -2207,7 +2202,6 @@ function renderMealsPage() {
   currentMealPhoto = '';
   const preview = document.getElementById('mealPhotoPreview');
   if (preview) preview.style.display = 'none';
-  renderFoodList();
 
   const stats = [
     { label: '今日摄入', value: todayCalories, unit: '卡', color: chartColors.accent, bg: '#FEF3C7' },
@@ -2332,9 +2326,7 @@ function addMeal() {
   saveData();
   document.getElementById('mealName').value = '';
   document.getElementById('mealCalories').value = '';
-  document.getElementById('foodSearch').value = '';
   removeMealPhoto();
-  renderFoodList();
   renderMealsPage();
   renderDashboard();
   showToast('饮食记录已添加');
@@ -2442,112 +2434,6 @@ const EXERCISE_CALORIE_PARAMS = {
   '篮球':     { perKm: 0,     perMin: 0.095 },
   '其他':     { perKm: 0,     perMin: 0.060 }
 };
-
-// 常见食物热量数据库（参考值，单位：卡/份，可手动调整）
-const FOOD_DATABASE = [
-  // 主食
-  { name: '米饭（一碗）', calories: 230, category: '主食' },
-  { name: '白粥（一碗）', calories: 70, category: '主食' },
-  { name: '馒头（一个）', calories: 220, category: '主食' },
-  { name: '花卷（一个）', calories: 210, category: '主食' },
-  { name: '包子（一个）', calories: 200, category: '主食' },
-  { name: '饺子（10个）', calories: 250, category: '主食' },
-  { name: '面条（一碗）', calories: 280, category: '主食' },
-  { name: '拉面（一碗）', calories: 450, category: '主食' },
-  { name: '炒面（一份）', calories: 550, category: '主食' },
-  { name: '面包（一片）', calories: 70, category: '主食' },
-  { name: '全麦面包（一片）', calories: 80, category: '主食' },
-  { name: '燕麦片（40g）', calories: 150, category: '主食' },
-  { name: '红薯（一个）', calories: 130, category: '主食' },
-  { name: '玉米（一根）', calories: 110, category: '主食' },
-  { name: '紫薯（一个）', calories: 120, category: '主食' },
-  { name: '三明治（一个）', calories: 350, category: '主食' },
-  { name: '汉堡（一个）', calories: 500, category: '主食' },
-  { name: '披萨（一块）', calories: 280, category: '主食' },
-  { name: '寿司（一份）', calories: 350, category: '主食' },
-  { name: '炒饭（一份）', calories: 600, category: '主食' },
-  { name: '盖浇饭（一份）', calories: 650, category: '主食' },
-  // 肉蛋奶
-  { name: '鸡胸肉（100g）', calories: 130, category: '肉蛋奶' },
-  { name: '鸡腿（一个）', calories: 180, category: '肉蛋奶' },
-  { name: '鸡翅（3个）', calories: 200, category: '肉蛋奶' },
-  { name: '炸鸡（一块）', calories: 280, category: '肉蛋奶' },
-  { name: '猪肉（100g）', calories: 395, category: '肉蛋奶' },
-  { name: '红烧肉（一份）', calories: 450, category: '肉蛋奶' },
-  { name: '牛肉（100g）', calories: 250, category: '肉蛋奶' },
-  { name: '牛排（一份）', calories: 400, category: '肉蛋奶' },
-  { name: '羊肉（100g）', calories: 290, category: '肉蛋奶' },
-  { name: '鱼（100g）', calories: 120, category: '肉蛋奶' },
-  { name: '三文鱼（100g）', calories: 200, category: '肉蛋奶' },
-  { name: '虾（100g）', calories: 90, category: '肉蛋奶' },
-  { name: '鸡蛋（一个）', calories: 70, category: '肉蛋奶' },
-  { name: '煎蛋（一个）', calories: 90, category: '肉蛋奶' },
-  { name: '茶叶蛋（一个）', calories: 75, category: '肉蛋奶' },
-  { name: '牛奶（一杯250ml）', calories: 130, category: '肉蛋奶' },
-  { name: '脱脂牛奶（一杯）', calories: 90, category: '肉蛋奶' },
-  { name: '酸奶（一杯）', calories: 100, category: '肉蛋奶' },
-  { name: '无糖酸奶（一杯）', calories: 60, category: '肉蛋奶' },
-  // 蔬菜
-  { name: '西兰花（一份）', calories: 50, category: '蔬菜' },
-  { name: '菠菜（一份）', calories: 30, category: '蔬菜' },
-  { name: '白菜（一份）', calories: 25, category: '蔬菜' },
-  { name: '黄瓜（一根）', calories: 15, category: '蔬菜' },
-  { name: '番茄（一个）', calories: 20, category: '蔬菜' },
-  { name: '茄子（一份）', calories: 30, category: '蔬菜' },
-  { name: '土豆（一个）', calories: 80, category: '蔬菜' },
-  { name: '胡萝卜（一根）', calories: 40, category: '蔬菜' },
-  { name: '生菜（一份）', calories: 15, category: '蔬菜' },
-  { name: '凉拌黄瓜（一份）', calories: 50, category: '蔬菜' },
-  { name: '番茄炒蛋（一份）', calories: 200, category: '蔬菜' },
-  { name: '炒青菜（一份）', calories: 80, category: '蔬菜' },
-  { name: '地三鲜（一份）', calories: 250, category: '蔬菜' },
-  // 水果
-  { name: '苹果（一个）', calories: 90, category: '水果' },
-  { name: '香蕉（一根）', calories: 90, category: '水果' },
-  { name: '橙子（一个）', calories: 70, category: '水果' },
-  { name: '橘子（一个）', calories: 50, category: '水果' },
-  { name: '西瓜（一块）', calories: 50, category: '水果' },
-  { name: '葡萄（一串）', calories: 100, category: '水果' },
-  { name: '草莓（10颗）', calories: 40, category: '水果' },
-  { name: '蓝莓（一盒）', calories: 80, category: '水果' },
-  { name: '猕猴桃（一个）', calories: 60, category: '水果' },
-  { name: '芒果（一个）', calories: 130, category: '水果' },
-  { name: '梨（一个）', calories: 100, category: '水果' },
-  { name: '桃子（一个）', calories: 70, category: '水果' },
-  { name: '火龙果（一个）', calories: 120, category: '水果' },
-  { name: '牛油果（半个）', calories: 160, category: '水果' },
-  // 零食饮料
-  { name: '奶茶（一杯）', calories: 350, category: '零食饮料' },
-  { name: '无糖奶茶（一杯）', calories: 150, category: '零食饮料' },
-  { name: '可乐（一罐）', calories: 140, category: '零食饮料' },
-  { name: '零度可乐（一罐）', calories: 0, category: '零食饮料' },
-  { name: '雪碧（一罐）', calories: 140, category: '零食饮料' },
-  { name: '果汁（一杯）', calories: 120, category: '零食饮料' },
-  { name: '咖啡（一杯）', calories: 5, category: '零食饮料' },
-  { name: '拿铁（一杯）', calories: 190, category: '零食饮料' },
-  { name: '美式咖啡（一杯）', calories: 10, category: '零食饮料' },
-  { name: '薯片（一包）', calories: 540, category: '零食饮料' },
-  { name: '巧克力（一块）', calories: 250, category: '零食饮料' },
-  { name: '饼干（3片）', calories: 150, category: '零食饮料' },
-  { name: '蛋糕（一块）', calories: 350, category: '零食饮料' },
-  { name: '冰淇淋（一个）', calories: 200, category: '零食饮料' },
-  { name: '棒棒糖（一个）', calories: 50, category: '零食饮料' },
-  { name: '坚果（一小把）', calories: 180, category: '零食饮料' },
-  { name: '辣条（一包）', calories: 300, category: '零食饮料' },
-  { name: '泡面（一桶）', calories: 450, category: '零食饮料' },
-  // 快餐小吃
-  { name: '薯条（中份）', calories: 340, category: '快餐小吃' },
-  { name: '炸鸡桶（一块）', calories: 320, category: '快餐小吃' },
-  { name: '鸡米花（一份）', calories: 380, category: '快餐小吃' },
-  { name: '烤肠（一根）', calories: 200, category: '快餐小吃' },
-  { name: '煎饼果子（一个）', calories: 400, category: '快餐小吃' },
-  { name: '手抓饼（一个）', calories: 380, category: '快餐小吃' },
-  { name: '肉夹馍（一个）', calories: 350, category: '快餐小吃' },
-  { name: '凉皮（一份）', calories: 280, category: '快餐小吃' },
-  { name: '烤冷面（一份）', calories: 350, category: '快餐小吃' },
-  { name: '臭豆腐（一份）', calories: 250, category: '快餐小吃' },
-  { name: '关东煮（一串）', calories: 80, category: '快餐小吃' }
-];
 
 function getBodyWeight() {
   const w = getCurrentWeight();
@@ -3266,37 +3152,6 @@ function removeMealPhoto() {
   currentMealPhoto = '';
   document.getElementById('mealPhotoPreview').style.display = 'none';
   document.getElementById('mealPhotoImg').src = '';
-}
-
-function renderFoodList() {
-  const listEl = document.getElementById('foodList');
-  if (!listEl) return;
-  const keyword = (document.getElementById('foodSearch')?.value || '').trim().toLowerCase();
-  const filtered = keyword
-    ? FOOD_DATABASE.filter(f => f.name.toLowerCase().includes(keyword) || f.category.includes(keyword))
-    : FOOD_DATABASE;
-  if (filtered.length === 0) {
-    listEl.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text-secondary);font-size:13px;">未找到匹配食物，可手动输入名称和热量</div>';
-    return;
-  }
-  listEl.innerHTML = filtered.map(f =>
-    '<div class="food-item" data-name="' + f.name + '" data-cal="' + f.calories + '" style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px;" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'transparent\'">' +
-      '<span>' + f.name + '</span>' +
-      '<span style="color:var(--text-secondary);font-size:12px;">' + f.calories + ' 卡</span>' +
-    '</div>'
-  ).join('');
-  // 绑定点击事件
-  listEl.querySelectorAll('.food-item').forEach(item => {
-    item.addEventListener('click', function() {
-      document.getElementById('mealName').value = this.dataset.name;
-      document.getElementById('mealCalories').value = this.dataset.cal;
-      showToast('已选择：' + this.dataset.name + '（' + this.dataset.cal + ' 卡），可手动调整');
-    });
-  });
-}
-
-function filterFoodList() {
-  renderFoodList();
 }
 
 function compressImage(dataUrl, maxWidth, quality) {
