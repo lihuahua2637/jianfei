@@ -1725,6 +1725,10 @@ body {
             </div>
             <div class="card-body">
               <div class="form-group">
+                <label class="form-label">起始体重 (kg)</label>
+                <input type="number" step="0.1" class="form-input" id="startWeight" placeholder="请输入起始体重">
+              </div>
+              <div class="form-group">
                 <label class="form-label">目标体重 (kg)</label>
                 <input type="number" step="0.1" class="form-input" id="targetWeight" placeholder="请输入目标体重">
               </div>
@@ -1761,7 +1765,7 @@ const STORAGE_KEY = 'fitness_dashboard_data';
 
 const defaultData = {
   profile: { name: '', gender: '男', age: 25, height: 170 },
-  goals: { targetWeight: 65, waterTarget: 2000, exerciseTarget: 5 },
+  goals: { startWeight: null, targetWeight: 65, waterTarget: 2000, exerciseTarget: 5 },
   weights: [],
   meals: [],
   exercises: [],
@@ -2076,7 +2080,7 @@ function getDayExercise(date) {
 function renderWeightPage() {
   const current = getCurrentWeight();
   const target = appData.goals.targetWeight;
-  const startWeight = appData.weights.length > 0 ? [...appData.weights].sort((a, b) => a.date.localeCompare(b.date))[0].weight : null;
+  const startWeight = appData.goals.startWeight || (appData.weights.length > 0 ? [...appData.weights].sort((a, b) => a.date.localeCompare(b.date))[0].weight : null);
 
   const stats = [
     { label: '当前体重', value: current || '--', unit: 'kg', color: chartColors.primary, bg: '#D1FAE5' },
@@ -2703,7 +2707,7 @@ function renderExerciseTypeChart() {
 function renderStatsSummary() {
   const totalDays = new Set([...appData.weights.map(w => w.date), ...appData.meals.map(m => m.date), ...appData.exercises.map(e => e.date), ...Object.keys(appData.water)]).size;
   const currentWeight = getCurrentWeight();
-  const startWeight = appData.weights.length > 0 ? [...appData.weights].sort((a, b) => a.date.localeCompare(b.date))[0].weight : null;
+  const startWeight = appData.goals.startWeight || (appData.weights.length > 0 ? [...appData.weights].sort((a, b) => a.date.localeCompare(b.date))[0].weight : null);
   const totalLost = (currentWeight && startWeight) ? (startWeight - currentWeight).toFixed(1) : '0';
   const totalMeals = appData.meals.length;
   const totalExercises = appData.exercises.length;
@@ -3143,6 +3147,7 @@ function renderGoalsPage() {
   document.getElementById('profileGender').value = appData.profile.gender || '男';
   document.getElementById('profileAge').value = appData.profile.age || '';
   document.getElementById('profileHeight').value = appData.profile.height || '';
+  document.getElementById('startWeight').value = appData.goals.startWeight || '';
   document.getElementById('targetWeight').value = appData.goals.targetWeight || '';
   document.getElementById('waterTarget').value = appData.goals.waterTarget || '';
   document.getElementById('exerciseTarget').value = appData.goals.exerciseTarget || '';
@@ -3243,13 +3248,16 @@ function saveProfile() {
 }
 
 function saveGoals() {
+  const swVal = document.getElementById('startWeight').value;
   const twVal = document.getElementById('targetWeight').value;
   const wtVal = document.getElementById('waterTarget').value;
   const etVal = document.getElementById('exerciseTarget').value;
+  const startWeight = swVal ? parseFloat(swVal) : null;
   const targetWeight = twVal ? parseFloat(twVal) : null;
   const waterTarget = wtVal ? parseInt(wtVal) : null;
   const exerciseTarget = etVal ? parseInt(etVal) : null;
 
+  if (startWeight !== null && (startWeight < 30 || startWeight > 200)) { showToast('请输入有效的起始体重'); return; }
   if (targetWeight !== null && (targetWeight < 30 || targetWeight > 200)) { showToast('请输入有效的目标体重'); return; }
   if (waterTarget !== null && (waterTarget < 500 || waterTarget > 6000)) { showToast('饮水目标应在 500-6000 ml 之间'); return; }
   if (exerciseTarget !== null && (exerciseTarget < 1 || exerciseTarget > 14)) { showToast('每周运动目标应在 1-14 次之间'); return; }
