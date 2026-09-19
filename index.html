@@ -3265,6 +3265,7 @@ function saveGoals() {
   // 部分更新：只更新填写了的字段，其余保留已保存的值
   appData.goals = {
     ...appData.goals,
+    startWeight: startWeight !== null ? startWeight : appData.goals.startWeight,
     targetWeight: targetWeight !== null ? targetWeight : appData.goals.targetWeight,
     waterTarget: waterTarget !== null ? waterTarget : appData.goals.waterTarget,
     exerciseTarget: exerciseTarget !== null ? exerciseTarget : appData.goals.exerciseTarget
